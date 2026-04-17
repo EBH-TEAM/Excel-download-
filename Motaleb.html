@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>RHP Clean Exporter | Grouped by Password Count</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(145deg, #0a0f1e 0%, #0f172a 100%);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .card {
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(2px);
+            border-radius: 2rem;
+            padding: 2rem 1.8rem;
+            text-align: center;
+            max-width: 550px;
+            width: 100%;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.6), 0 0 0 1px rgba(71,85,105,0.4);
+        }
+        h2 {
+            background: linear-gradient(135deg, #c084fc, #60a5fa);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 1.8rem;
+        }
+        .auto-download-btn {
+            background: linear-gradient(105deg, #2563eb, #1e40af);
+            border: none;
+            padding: 16px 28px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: white;
+            border-radius: 60px;
+            cursor: pointer;
+            width: 100%;
+            margin: 20px 0 12px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            transition: all 0.25s ease;
+            box-shadow: 0 10px 20px -5px rgba(37,99,235,0.4);
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+        .auto-download-btn:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(105deg, #3b82f6, #2563eb);
+        }
+        .status {
+            background: #0f172a;
+            padding: 1rem 1.2rem;
+            border-radius: 1.2rem;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            margin-top: 20px;
+            border-left: 4px solid #3b82f6;
+            text-align: left;
+            font-family: monospace;
+            word-break: break-word;
+        }
+        .badge {
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 5px 14px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            display: inline-flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .loader {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.6s linear infinite;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .footer-note { font-size: 0.7rem; color: #475569; margin-top: 18px; }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="card">
+    <h2><i class="fas fa-chart-line" style="color: #60a5fa;"></i> RHP · PASSWORD GROUP EXPORTER</h2>
+    <button class="auto-download-btn" id="exportBtn"><i class="fas fa-file-csv"></i> EXPORT (SORTED BY COUNT)</button>
+    <div class="status" id="statusMsg"><i class="fas fa-sync-alt"></i> Initializing & sorting by password frequency...</div>
+    <div class="badge"><i class="fas fa-sort-amount-down"></i> Most accounts password first &nbsp;|&nbsp; No BOM / No extra quotes</div>
+    <div class="footer-note">📁 যে পাসওয়ার্ডে সবচেয়ে বেশি একাউন্ট, সেটা প্রথমে → তারপর ক্রমান্বয়ে</div>
+</div>
+
+<script>
+    // ==================== NEW FIREBASE CONFIG (RHP Database) ====================
+    const firebaseConfig = {
+        apiKey: "AIzaSyB2ul7SMulLalH3Bi3j0jp1km0oLSM939Q",
+        authDomain: "rhp-cb421.firebaseapp.com",
+        databaseURL: "https://rhp-cb421-default-rtdb.firebaseio.com",
+        projectId: "rhp-cb421",
+        storageBucket: "rhp-cb421.firebasestorage.app",
+        messagingSenderId: "878808791188",
+        appId: "1:878808791188:web:2a3992f50edff41a4d1c81",
+        measurementId: "G-7VRRCMD4BJ"
+    };
+    // ============================================================================
+
+    // Initialize Firebase (পুরোনো কোন ডাটাবেস থাকলেও এটা ওভাররাইট করবে)
+    let app;
+    try {
+        app = firebase.initializeApp(firebaseConfig);
+        console.log("✅ Firebase initialized: RHP Database (rhp-cb421)");
+    } catch (err) {
+        console.warn("Init error, maybe already initialized?", err);
+        app = firebase.app(); // fallback
+    }
+    const database = firebase.database();
+
+    function cleanString(rawValue) {
+        if (rawValue === undefined || rawValue === null) return "";
+        let cleaned = String(rawValue);
+        cleaned = cleaned.replace(/^\uFEFF/, '').replace(/^ï»¿/, '');
+        cleaned = cleaned.replace(/^"+/, '').replace(/"+$/, '');
+        cleaned = cleaned.trim();
+        return cleaned;
+    }
+
+    async function fetchAllAccountEntries() {
+        const rootSnapshot = await database.ref('/').once('value');
+        const rootData = rootSnapshot.val();
+        if (!rootData) return [];
+
+        const accountsArray = [];
+
+        function traverse(node) {
+            if (!node || typeof node !== 'object') return;
+            const hasUsername = (node.username !== undefined || node.user !== undefined);
+            const hasPassword = (node.password !== undefined || node.pass !== undefined);
+            if (hasUsername && hasPassword) {
+                let rawUsername = node.username || node.user || "";
+                let rawPassword = node.password || node.pass || "";
+                let rawCookie = node.cookies || node.cookie || node.token || "";
+                let cleanUsername = cleanString(rawUsername);
+                let cleanPassword = cleanString(rawPassword);
+                let cleanCookie = cleanString(rawCookie);
+                if (cleanUsername === "") cleanUsername = "N/A";
+                if (cleanPassword === "") cleanPassword = "N/A";
+                accountsArray.push({
+                    username: cleanUsername,
+                    password: cleanPassword,
+                    cookies: cleanCookie
+                });
+            }
+            for (let key in node) {
+                if (node.hasOwnProperty(key) && typeof node[key] === 'object') {
+                    traverse(node[key]);
+                }
+            }
+        }
+        traverse(rootData);
+
+        // ফলের মধ্যে কিছু না থাকলে fallback path (যদি accounts/parvez স্ট্রাকচার থাকে)
+        if (accountsArray.length === 0) {
+            const legacySnapshot = await database.ref('accounts/parvez').once('value');
+            const parvezData = legacySnapshot.val();
+            if (parvezData && typeof parvezData === 'object') {
+                Object.values(parvezData).forEach(item => {
+                    if (item && typeof item === 'object') {
+                        let rawUsername = item.username || item.user || "";
+                        let rawPassword = item.password || item.pass || "";
+                        let rawCookie = item.cookies || item.cookie || "";
+                        let cleanUsername = cleanString(rawUsername);
+                        let cleanPassword = cleanString(rawPassword);
+                        let cleanCookie = cleanString(rawCookie);
+                        if (cleanUsername === "") cleanUsername = "N/A";
+                        if (cleanPassword === "") cleanPassword = "N/A";
+                        accountsArray.push({ username: cleanUsername, password: cleanPassword, cookies: cleanCookie });
+                    }
+                });
+            }
+        }
+
+        // ডুপ্লিকেট রিমুভ (একই ইউজারনেম + পাসওয়ার্ড)
+        const uniqueMap = new Map();
+        for (const acc of accountsArray) {
+            const key = `${acc.username}|${acc.password}`;
+            if (!uniqueMap.has(key)) uniqueMap.set(key, acc);
+        }
+        return Array.from(uniqueMap.values());
+    }
+
+    async function exportDataToCSV() {
+        const statusDiv = document.getElementById("statusMsg");
+        statusDiv.innerHTML = '<span class="loader"></span> Fetching & grouping by password count ...';
+
+        try {
+            let accounts = await fetchAllAccountEntries();
+            if (!accounts.length) {
+                statusDiv.innerHTML = '⚠️ No account records found in RHP Database.';
+                return;
+            }
+
+            // 1. Group by password
+            const groupByPassword = new Map();
+            for (const acc of accounts) {
+                const pwd = acc.password;
+                if (!groupByPassword.has(pwd)) groupByPassword.set(pwd, []);
+                groupByPassword.get(pwd).push(acc);
+            }
+
+            // 2. Sort groups by size (most accounts first)
+            const sortedGroups = Array.from(groupByPassword.entries());
+            sortedGroups.sort((a, b) => b[1].length - a[1].length);
+
+            // 3. Final ordered list
+            const orderedAccounts = [];
+            for (const [password, groupAccounts] of sortedGroups) {
+                orderedAccounts.push(...groupAccounts);
+            }
+
+            // 4. CSV generation (no header, no BOM)
+            function formatField(value) {
+                if (value === undefined || value === null) return '""';
+                let str = String(value);
+                if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+                    str = str.replace(/"/g, '""');
+                    return `"${str}"`;
+                }
+                return str;
+            }
+
+            const csvRows = [];
+            for (const acc of orderedAccounts) {
+                csvRows.push(`${formatField(acc.username)},${formatField(acc.password)},${formatField(acc.cookies)}`);
+            }
+
+            let csvContent = csvRows.join("\n");
+            csvContent = csvContent.replace(/^\uFEFF/, '');
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}-${String(now.getSeconds()).padStart(2,'0')}`;
+            const fileName = `MOTALEB_ACCOUNT_${dateStr}.csv`;
+
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            // Show top password info
+            let topInfo = "";
+            if (sortedGroups.length > 0) {
+                const topPwd = sortedGroups[0][0];
+                const topCount = sortedGroups[0][1].length;
+                topInfo = `<br>🔑 সর্বোচ্চ একাউন্টের পাসওয়ার্ড: "${topPwd}" → মোট ${topCount} টি একাউন্ট (সবার উপরে)`;
+            }
+
+            statusDiv.innerHTML = `✅ Clean Export Success! <br> 📄 ${fileName} <br> 📊 Total accounts: ${orderedAccounts.length} <br> 📌 পাসওয়ার্ড অনুযায়ী সাজানো (বেশি→কম)${topInfo}`;
+
+        } catch (err) {
+            console.error("Export error:", err);
+            statusDiv.innerHTML = `❌ Export failed: ${err.message}`;
+        }
+    }
+
+    document.getElementById("exportBtn").addEventListener("click", () => exportDataToCSV());
+    window.addEventListener("DOMContentLoaded", () => setTimeout(() => exportDataToCSV(), 400));
+</script>
+</body>
+</html>
