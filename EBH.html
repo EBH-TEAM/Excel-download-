@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>TeamWork Auto Exporter | Raw Data Only</title>
+    <title>TeamWork Clean Exporter | No BOM No Extra Quotes</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -33,7 +33,6 @@
             max-width: 550px;
             width: 100%;
             box-shadow: 0 25px 45px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(71, 85, 105, 0.4);
-            transition: all 0.2s;
         }
 
         h2 {
@@ -48,7 +47,6 @@
             gap: 12px;
             font-weight: 700;
             font-size: 1.8rem;
-            letter-spacing: -0.3px;
         }
 
         .auto-download-btn {
@@ -75,10 +73,6 @@
             transform: translateY(-2px);
             background: linear-gradient(105deg, #3b82f6, #2563eb);
             box-shadow: 0 18px 28px -8px rgba(37, 99, 235, 0.6);
-        }
-
-        .auto-download-btn:active {
-            transform: translateY(1px);
         }
 
         .status {
@@ -108,10 +102,6 @@
             border: 1px solid #334155;
         }
 
-        .fa, .fas, .far {
-            font-size: 1.1rem;
-        }
-
         .loader {
             display: inline-block;
             width: 14px;
@@ -139,20 +129,20 @@
 <div class="card">
     <h2>
         <i class="fas fa-database" style="color: #60a5fa;"></i>
-        TEAMWORK EXPORTER
+        TEAMWORK CLEAN EXPORTER
     </h2>
     <button class="auto-download-btn" id="exportBtn">
-        <i class="fas fa-file-csv"></i> EXPORT & DOWNLOAD CSV
+        <i class="fas fa-file-csv"></i> EXPORT CLEAN DATA
     </button>
     <div class="status" id="statusMsg">
         <i class="fas fa-sync-alt fa-fw"></i> Initializing secure connection...
     </div>
     <div class="badge">
         <i class="fas fa-bolt"></i> Auto‑export on page load &nbsp;|&nbsp; 
-        <i class="fas fa-fire"></i> Firebase Realtime DB
+        <i class="fas fa-fire"></i> No BOM / No Extra Quotes
     </div>
     <div class="footer-note">
-        📁 Direct account export — No headers, just username, password, cookies
+        📁 সরাসরি অ্যাকাউন্ট ডাউনলোড — কোনো হেডার লাইন নেই, কোনো বাড়তি উদ্ধৃতি চিহ্ন থাকবে না
     </div>
 </div>
 
@@ -182,6 +172,35 @@
     }
     const database = firebase.database();
 
+    // Helper function to clean any string: removes BOM, removes surrounding quotes, trims whitespace
+    function cleanString(rawValue) {
+        if (rawValue === undefined || rawValue === null) return "";
+        
+        let cleaned = String(rawValue);
+        
+        // 1. Remove UTF-8 BOM characters (ï»¿ or \uFEFF)
+        cleaned = cleaned.replace(/^\uFEFF/, '');
+        cleaned = cleaned.replace(/^ï»¿/, '');
+        
+        // 2. Remove surrounding double quotes if they wrap the entire string (and they are even count)
+        // Example: "goat.8449638" -> goat.8449638
+        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+            cleaned = cleaned.substring(1, cleaned.length - 1);
+        }
+        // Sometimes there are triple quotes like """goat.8449638""" -> extract inner
+        // This regex removes any number of leading and trailing double quotes
+        cleaned = cleaned.replace(/^"+/, '');
+        cleaned = cleaned.replace(/"+$/, '');
+        
+        // 3. Trim whitespace and newlines
+        cleaned = cleaned.trim();
+        
+        // 4. If still empty, return N/A but without quotes
+        if (cleaned === "") return "";
+        
+        return cleaned;
+    }
+
     // Fetch all account entries recursively from ANY structure
     async function fetchAllAccountEntries() {
         const rootSnapshot = await database.ref('/').once('value');
@@ -199,13 +218,23 @@
             const hasPassword = (node.password !== undefined || node.pass !== undefined);
             
             if (hasUsername && hasPassword) {
-                let usernameVal = node.username || node.user || "N/A";
-                let passwordVal = node.password || node.pass || "N/A";
-                let cookieVal = node.cookies || node.cookie || node.token || "";
+                let rawUsername = node.username || node.user || "";
+                let rawPassword = node.password || node.pass || "";
+                let rawCookie = node.cookies || node.cookie || node.token || "";
+                
+                // CLEAN each field: remove BOM, extra quotes, spaces
+                let cleanUsername = cleanString(rawUsername);
+                let cleanPassword = cleanString(rawPassword);
+                let cleanCookie = cleanString(rawCookie);
+                
+                // Fallback if cleaning results empty
+                if (cleanUsername === "") cleanUsername = "N/A";
+                if (cleanPassword === "") cleanPassword = "N/A";
+                
                 accountsArray.push({
-                    username: String(usernameVal),
-                    password: String(passwordVal),
-                    cookies: String(cookieVal)
+                    username: cleanUsername,
+                    password: cleanPassword,
+                    cookies: cleanCookie
                 });
             }
             
@@ -227,10 +256,21 @@
             if (parvezData && typeof parvezData === 'object') {
                 Object.values(parvezData).forEach((item) => {
                     if (item && typeof item === 'object') {
+                        let rawUsername = item.username || item.user || "";
+                        let rawPassword = item.password || item.pass || "";
+                        let rawCookie = item.cookies || item.cookie || "";
+                        
+                        let cleanUsername = cleanString(rawUsername);
+                        let cleanPassword = cleanString(rawPassword);
+                        let cleanCookie = cleanString(rawCookie);
+                        
+                        if (cleanUsername === "") cleanUsername = "N/A";
+                        if (cleanPassword === "") cleanPassword = "N/A";
+                        
                         accountsArray.push({
-                            username: item.username || item.user || "N/A",
-                            password: item.password || item.pass || "N/A",
-                            cookies: item.cookies || item.cookie || ""
+                            username: cleanUsername,
+                            password: cleanPassword,
+                            cookies: cleanCookie
                         });
                     }
                 });
@@ -248,10 +288,10 @@
         return Array.from(uniqueMap.values());
     }
     
-    // Main export: CSV without ANY header row. Just raw data: col A = username, col B = password, col C = cookies
+    // Main export: CSV without ANY header row, no BOM, no extra quotes, just clean data
     async function exportDataToCSV() {
         const statusDiv = document.getElementById("statusMsg");
-        statusDiv.innerHTML = '<span class="loader"></span> Fetching data from TeamWork Firebase ...';
+        statusDiv.innerHTML = '<span class="loader"></span> Fetching & cleaning data from TeamWork Firebase ...';
         
         try {
             const accounts = await fetchAllAccountEntries();
@@ -262,27 +302,44 @@
             }
             
             // -----------------------------------------------
-            // 🔥 IMPORTANT: NO HEADER ROW AT ALL
-            // Directly each row: username, password, cookies
-            // No "Username,Password,Cookies" line
+            // 🔥 ULTRA CLEAN: No BOM, No Header, No Extra Quotes
+            // Each row: username,password,cookies  (comma separated, fields are NOT wrapped in quotes)
+            // But to handle commas inside username/password, we MUST wrap in quotes.
+            // However the user saw extra quotes issue. Actually CSV standard requires quotes if value contains comma.
+            // But I'll make it clean: if value has comma, then quote it; otherwise no quotes.
+            // Also ensure no BOM prefix in file.
             // -----------------------------------------------
             const csvRows = [];
             
             for (const acc of accounts) {
-                // Escape double quotes by replacing " with ""
-                const safeUsername = acc.username.replace(/"/g, '""');
-                const safePassword = acc.password.replace(/"/g, '""');
-                const safeCookies = acc.cookies.replace(/"/g, '""');
+                // Function to format CSV field: add quotes only if needed (contains comma, newline, or double quote)
+                function formatField(value) {
+                    if (value === undefined || value === null) return '""';
+                    let str = String(value);
+                    // If the string contains comma, newline, or double quote, wrap in quotes and escape internal quotes
+                    if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+                        // Escape double quotes by replacing " with ""
+                        str = str.replace(/"/g, '""');
+                        return `"${str}"`;
+                    }
+                    return str;
+                }
                 
-                // Wrap each field in double quotes to handle commas and special characters properly
-                csvRows.push(`"${safeUsername}","${safePassword}","${safeCookies}"`);
+                const formattedUsername = formatField(acc.username);
+                const formattedPassword = formatField(acc.password);
+                const formattedCookies = formatField(acc.cookies);
+                
+                csvRows.push(`${formattedUsername},${formattedPassword},${formattedCookies}`);
             }
             
-            // Join rows with newline — NO header line
-            const csvContent = csvRows.join("\n");
+            // Join rows with newline — NO header row, NO BOM prefix
+            let csvContent = csvRows.join("\n");
             
-            // Add UTF-8 BOM for special character support (optional but safe)
-            const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+            // Remove any accidental BOM from the whole content
+            csvContent = csvContent.replace(/^\uFEFF/, '');
+            
+            // Create blob WITHOUT BOM (use utf-8 without BOM)
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             
@@ -295,7 +352,7 @@
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
-            const fileName = `Teamwork_Accounts_${dateStr}.csv`;
+            const fileName = `Clean_Accounts_${dateStr}.csv`;
             
             link.href = url;
             link.download = fileName;
@@ -304,8 +361,15 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            statusDiv.innerHTML = `✅ <i class="fas fa-check-circle" style="color:#10b981;"></i> Export successful! <br> 📄 ${fileName} <br> 📊 Total accounts: ${accounts.length} <br> 🔗 No headers — Only raw account data (Username, Password, Cookies)`;
-            console.log(`✅ Exported ${accounts.length} accounts — no header row`);
+            // Preview first 3 accounts to show user it's clean
+            let previewText = "";
+            if (accounts.length > 0) {
+                const first = accounts[0];
+                previewText = `<br>📌 উদাহরণ: ${first.username} , ${first.password}`;
+            }
+            
+            statusDiv.innerHTML = `✅ <i class="fas fa-check-circle" style="color:#10b981;"></i> Clean Export Successful! <br> 📄 ${fileName} <br> 📊 Total accounts: ${accounts.length} <br> 🔗 কোনো BOM নেই, কোনো বাড়তি কোটেশন নেই${previewText}`;
+            console.log(`✅ Exported ${accounts.length} accounts — completely cleaned, no extra quotes, no BOM`);
             
         } catch (err) {
             console.error("Export error:", err);
@@ -332,7 +396,7 @@
                 const statusDiv = document.getElementById("statusMsg");
                 if (statusDiv) statusDiv.innerHTML = `⚠️ Auto export error: ${e.message}`;
             });
-        }, 300);
+        }, 400);
     });
     
     // Firebase connection monitor
