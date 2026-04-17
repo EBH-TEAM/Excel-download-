@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title> Auto Export with Button</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f172a;
+            font-family: system-ui, -apple-system, 'Segoe UI', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 24px;
+            padding: 30px 25px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+        }
+        h2 {
+            color: #3b82f6;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .auto-download-btn {
+            background: linear-gradient(135deg, #059669, #10b981);
+            border: none;
+            padding: 16px 24px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: white;
+            border-radius: 60px;
+            cursor: pointer;
+            width: 100%;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            transition: all 0.3s;
+            box-shadow: 0 8px 20px rgba(5,150,105,0.3);
+        }
+        .auto-download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(5,150,105,0.5);
+        }
+        .status {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 16px;
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-top: 15px;
+            border-left: 4px solid #3b82f6;
+        }
+        .badge {
+            background: #3b82f6;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            display: inline-block;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>
+        <i class="fas fa-file-excel" style="color: #10b981;"></i>
+        
+        AUTO EXPORTER
+    </h2>
+    <button class="auto-download-btn" id="exportBtn">
+        <i class="fas fa-download"></i> DOWNLOAD NOW 
+    </button>
+    <div class="status" id="statusMsg">
+        ⏳ Script loaded — Auto download starting...
+    </div>
+    <div class="badge">⚡ Auto-download on page load</div>
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyBz2SqUFMrZ7X66YckQgT56MTX3hvwy0_0",
+        authDomain: "sell1-a003a.firebaseapp.com",
+        databaseURL: "https://sell1-a003a-default-rtdb.firebaseio.com",
+        projectId: "sell1-a003a",
+        storageBucket: "sell1-a003a.firebasestorage.app",
+        messagingSenderId: "516117230936",
+        appId: "1:516117230936:web:cbd5499bdfac218562a12d"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    async function exportDataToCSV() {
+        const statusDiv = document.getElementById("statusMsg");
+        statusDiv.innerHTML = "📡 Fetching data from Firebase...";
+        
+        try {
+            const snapshot = await db.ref("accounts/parvez").once("value");
+            const accounts = [];
+            
+            snapshot.forEach(child => {
+                const data = child.val();
+                accounts.push({
+                    username: data.username || "N/A",
+                    password: data.password || "N/A",
+                    cookies: data.cookies || data.cookie || "No cookies"
+                });
+            });
+
+            if (accounts.length === 0) {
+                statusDiv.innerHTML = "⚠️ No accounts found in database.";
+                return;
+            }
+
+            // CSV তৈরি
+            let csvRows = [];
+            csvRows.push(["Username", "Password", "Cookies"]);
+            
+            accounts.forEach(acc => {
+                csvRows.push([
+                    `"${acc.username.replace(/"/g, '""')}"`,
+                    `"${acc.password.replace(/"/g, '""')}"`,
+                    `"${acc.cookies.replace(/"/g, '""')}"`
+                ]);
+            });
+            
+            const csvContent = csvRows.map(row => row.join(",")).join("\n");
+            const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0,19).replace(/:/g, '-');
+            const fileName = `Account_Data_${dateStr}.csv`;
+            
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            statusDiv.innerHTML = `✅ Auto export successful! <br> 📄 ${fileName} <br> 📊 Total accounts: ${accounts.length}`;
+            console.log(`✅ Exported ${accounts.length} accounts`);
+            
+        } catch (err) {
+            console.error(err);
+            statusDiv.innerHTML = `❌ Export failed: ${err.message}`;
+        }
+    }
+
+    // বাটনে ক্লিক করলেও কাজ করবে
+    document.getElementById("exportBtn").addEventListener("click", exportDataToCSV);
+    
+    // ⭐ পেজ লোড হলে অটোমেটিক ডাউনলোড হবে (কোনো ক্লিক ছাড়াই)
+    window.addEventListener("DOMContentLoaded", exportDataToCSV);
+</script>
+</body>
+</html>
