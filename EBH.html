@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>TeamWork Clean Exporter | Grouped by Password Count</title>
+    <title>EBH TEAM · Complete Account Exporter</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -24,7 +24,7 @@
             border-radius: 2rem;
             padding: 2rem 1.8rem;
             text-align: center;
-            max-width: 550px;
+            max-width: 600px;
             width: 100%;
             box-shadow: 0 25px 45px rgba(0,0,0,0.6), 0 0 0 1px rgba(71,85,105,0.4);
         }
@@ -98,25 +98,35 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .footer-note { font-size: 0.7rem; color: #475569; margin-top: 18px; }
+        .stats-mini {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            font-size: 0.7rem;
+            color: #64748b;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 <div class="card">
-    <h2><i class="fas fa-chart-line" style="color: #60a5fa;"></i> TEAMWORK · PASSWORD GROUP EXPORTER</h2>
-    <button class="auto-download-btn" id="exportBtn"><i class="fas fa-file-csv"></i> EXPORT (SORTED BY COUNT)</button>
-    <div class="status" id="statusMsg"><i class="fas fa-sync-alt"></i> Initializing & sorting by password frequency...</div>
-    <div class="badge"><i class="fas fa-sort-amount-down"></i> Most accounts password first &nbsp;|&nbsp; No BOM / No extra quotes</div>
-    <div class="footer-note">📁 যে পাসওয়ার্ডে সবচেয়ে বেশি একাউন্ট, সেটা প্রথমে → তারপর ক্রমান্বয়ে</div>
+    <h2><i class="fas fa-chart-line" style="color: #60a5fa;"></i> EBH TEAM · COMPLETE EXPORTER</h2>
+    <button class="auto-download-btn" id="exportBtn"><i class="fas fa-file-csv"></i> 📥 DOWNLOAD ALL ACCOUNTS (CSV)</button>
+    <div class="status" id="statusMsg"><i class="fas fa-sync-alt"></i> Initializing & fetching from Firebase...</div>
+    <div class="badge"><i class="fas fa-sort-amount-down"></i> Grouped by password (most accounts first) &nbsp;|&nbsp; Auto remove duplicates</div>
+    <div class="footer-note">📁 Exact same structure as User Panel & Admin Panel | No account will be missed</div>
 </div>
 
 <script>
+    // ============================================
+    // FIREBASE CONFIGURATION (SAME AS USER PANEL)
+    // ============================================
     const firebaseConfig = {
         apiKey: "AIzaSyDLh6Zg-K3ZZexLvLloRaR0F6Wr4ciHqAs",
         authDomain: "teamwork-206ba.firebaseapp.com",
         databaseURL: "https://teamwork-206ba-default-rtdb.firebaseio.com",
         projectId: "teamwork-206ba",
-        storageBucket: "teamwork-206ba.firebasestorage.app",
+        storageBucket: "teamwork-206ba.appspot.com",
         messagingSenderId: "906293702680",
         appId: "1:906293702680:web:bf8c2257e1e87964ded36d"
     };
@@ -124,6 +134,9 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
+    // ============================================
+    // CLEAN STRING FUNCTION (Removes BOM, extra quotes)
+    // ============================================
     function cleanString(rawValue) {
         if (rawValue === undefined || rawValue === null) return "";
         let cleaned = String(rawValue);
@@ -133,150 +146,310 @@
         return cleaned;
     }
 
-    async function fetchAllAccountEntries() {
-        const rootSnapshot = await database.ref('/').once('value');
-        const rootData = rootSnapshot.val();
-        if (!rootData) return [];
-
-        const accountsArray = [];
-
-        function traverse(node) {
-            if (!node || typeof node !== 'object') return;
-            const hasUsername = (node.username !== undefined || node.user !== undefined);
-            const hasPassword = (node.password !== undefined || node.pass !== undefined);
-            if (hasUsername && hasPassword) {
-                let rawUsername = node.username || node.user || "";
-                let rawPassword = node.password || node.pass || "";
-                let rawCookie = node.cookies || node.cookie || node.token || "";
-                let cleanUsername = cleanString(rawUsername);
-                let cleanPassword = cleanString(rawPassword);
-                let cleanCookie = cleanString(rawCookie);
-                if (cleanUsername === "") cleanUsername = "N/A";
-                if (cleanPassword === "") cleanPassword = "N/A";
-                accountsArray.push({
-                    username: cleanUsername,
-                    password: cleanPassword,
-                    cookies: cleanCookie
-                });
-            }
-            for (let key in node) {
-                if (node.hasOwnProperty(key) && typeof node[key] === 'object') {
-                    traverse(node[key]);
-                }
+    // ============================================
+    // INTELLIGENT FIELD DETECTION
+    // ============================================
+    function getFieldValue(node, possibleKeys) {
+        if (!node || typeof node !== 'object') return "";
+        for (let key of possibleKeys) {
+            if (node[key] !== undefined && node[key] !== null && node[key] !== "") {
+                return cleanString(node[key]);
             }
         }
-        traverse(rootData);
-
-        // fallback
-        if (accountsArray.length === 0) {
-            const legacySnapshot = await database.ref('accounts/parvez').once('value');
-            const parvezData = legacySnapshot.val();
-            if (parvezData && typeof parvezData === 'object') {
-                Object.values(parvezData).forEach(item => {
-                    if (item && typeof item === 'object') {
-                        let rawUsername = item.username || item.user || "";
-                        let rawPassword = item.password || item.pass || "";
-                        let rawCookie = item.cookies || item.cookie || "";
-                        let cleanUsername = cleanString(rawUsername);
-                        let cleanPassword = cleanString(rawPassword);
-                        let cleanCookie = cleanString(rawCookie);
-                        if (cleanUsername === "") cleanUsername = "N/A";
-                        if (cleanPassword === "") cleanPassword = "N/A";
-                        accountsArray.push({ username: cleanUsername, password: cleanPassword, cookies: cleanCookie });
-                    }
-                });
-            }
-        }
-
-        // remove duplicate (same username+password)
-        const uniqueMap = new Map();
-        for (const acc of accountsArray) {
-            const key = `${acc.username}|${acc.password}`;
-            if (!uniqueMap.has(key)) uniqueMap.set(key, acc);
-        }
-        return Array.from(uniqueMap.values());
+        return "";
     }
 
-    async function exportDataToCSV() {
+    // ============================================
+    // MAIN ACCOUNT FETCHING - COVERS ALL LOCATIONS
+    // ============================================
+    async function fetchAllAccounts() {
         const statusDiv = document.getElementById("statusMsg");
-        statusDiv.innerHTML = '<span class="loader"></span> Fetching & grouping by password count ...';
+        let allAccounts = [];
+        let locationStats = {};
 
         try {
-            let accounts = await fetchAllAccountEntries();
-            if (!accounts.length) {
-                statusDiv.innerHTML = '⚠️ No account records found.';
-                return;
+            // ============================================
+            // 1. PRIMARY LOCATION: accounts/parvez (User Panel saves here)
+            // ============================================
+            statusDiv.innerHTML = '<span class="loader"></span> 📂 Checking accounts/parvez ...';
+            const parvezSnapshot = await database.ref('accounts/parvez').once('value');
+            const parvezData = parvezSnapshot.val();
+            
+            if (parvezData && typeof parvezData === 'object') {
+                let count = 0;
+                Object.values(parvezData).forEach(item => {
+                    if (item && typeof item === 'object') {
+                        const username = getFieldValue(item, ['username', 'user', 'userName', 'email', 'id']);
+                        const password = getFieldValue(item, ['password', 'pass', 'pwd', 'key', 'passwords']);
+                        const cookies = getFieldValue(item, ['cookies', 'cookie', 'token', 'cookies_data', 'cookie_data', 'cookiesData']);
+                        
+                        if (username && username !== "" && username !== "N/A" && password && password !== "") {
+                            allAccounts.push({
+                                username: username,
+                                password: password,
+                                cookies: cookies || "",
+                                source: 'accounts/parvez'
+                            });
+                            count++;
+                        }
+                    }
+                });
+                locationStats['accounts/parvez'] = count;
+                console.log(`✅ accounts/parvez: ${count} accounts found`);
             }
 
-            // 1. Group by password
-            const groupByPassword = new Map(); // key = password, value = array of {username, password, cookies}
-            for (const acc of accounts) {
-                const pwd = acc.password;
-                if (!groupByPassword.has(pwd)) groupByPassword.set(pwd, []);
-                groupByPassword.get(pwd).push(acc);
+            // ============================================
+            // 2. BACKUP LOCATION: accounts/ (root level accounts)
+            // ============================================
+            statusDiv.innerHTML = '<span class="loader"></span> 📂 Checking accounts/ ...';
+            const accountsSnapshot = await database.ref('accounts').once('value');
+            const accountsData = accountsSnapshot.val();
+            
+            if (accountsData && typeof accountsData === 'object') {
+                let count = 0;
+                // Skip parvez because already processed
+                Object.entries(accountsData).forEach(([key, value]) => {
+                    if (key !== 'parvez' && value && typeof value === 'object') {
+                        // Check if it's an account object directly
+                        const username = getFieldValue(value, ['username', 'user', 'userName', 'email', 'id']);
+                        const password = getFieldValue(value, ['password', 'pass', 'pwd', 'key', 'passwords']);
+                        
+                        if (username && username !== "" && username !== "N/A" && password && password !== "") {
+                            const cookies = getFieldValue(value, ['cookies', 'cookie', 'token', 'cookies_data', 'cookie_data']);
+                            allAccounts.push({
+                                username: username,
+                                password: password,
+                                cookies: cookies || "",
+                                source: `accounts/${key}`
+                            });
+                            count++;
+                        } else if (value && typeof value === 'object') {
+                            // Check if it's a nested structure (like push IDs)
+                            Object.values(value).forEach(subItem => {
+                                if (subItem && typeof subItem === 'object') {
+                                    const subUsername = getFieldValue(subItem, ['username', 'user', 'userName', 'email', 'id']);
+                                    const subPassword = getFieldValue(subItem, ['password', 'pass', 'pwd', 'key', 'passwords']);
+                                    if (subUsername && subUsername !== "" && subUsername !== "N/A" && subPassword && subPassword !== "") {
+                                        const subCookies = getFieldValue(subItem, ['cookies', 'cookie', 'token', 'cookies_data', 'cookie_data']);
+                                        allAccounts.push({
+                                            username: subUsername,
+                                            password: subPassword,
+                                            cookies: subCookies || "",
+                                            source: `accounts/${key}`
+                                        });
+                                        count++;
+                                    }
+                                }
+                            });
+                        }
+                    }
+                });
+                locationStats['accounts/ (other)'] = count;
+                console.log(`✅ accounts/ (other): ${count} accounts found`);
             }
 
-            // 2. Convert to array and sort by group size (most accounts first)
-            const sortedGroups = Array.from(groupByPassword.entries());
-            sortedGroups.sort((a, b) => b[1].length - a[1].length);
-
-            // 3. Build final ordered accounts list
-            const orderedAccounts = [];
-            for (const [password, groupAccounts] of sortedGroups) {
-                orderedAccounts.push(...groupAccounts);
-            }
-
-            // 4. CSV generation (no header, no BOM)
-            function formatField(value) {
-                if (value === undefined || value === null) return '""';
-                let str = String(value);
-                if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-                    str = str.replace(/"/g, '""');
-                    return `"${str}"`;
+            // ============================================
+            // 3. COMPLETE ROOT TRAVERSAL (for any missed data)
+            // ============================================
+            statusDiv.innerHTML = '<span class="loader"></span> 📂 Scanning entire database for any missed accounts...';
+            
+            async function deepTraverse(node, path = "") {
+                if (!node || typeof node !== 'object') return;
+                
+                // Skip already processed paths
+                if (path === 'accounts/parvez' || path === 'accounts') return;
+                
+                // Check if current node looks like an account
+                const hasUsername = (node.username !== undefined || node.user !== undefined || node.userName !== undefined || node.email !== undefined);
+                const hasPassword = (node.password !== undefined || node.pass !== undefined || node.pwd !== undefined || node.key !== undefined);
+                
+                if (hasUsername && hasPassword) {
+                    const username = getFieldValue(node, ['username', 'user', 'userName', 'email', 'id']);
+                    const password = getFieldValue(node, ['password', 'pass', 'pwd', 'key', 'passwords']);
+                    const cookies = getFieldValue(node, ['cookies', 'cookie', 'token', 'cookies_data', 'cookie_data', 'cookiesData']);
+                    
+                    if (username && username !== "" && username !== "N/A" && password && password !== "") {
+                        // Check if already exists (avoid duplicate from previous locations)
+                        const exists = allAccounts.some(acc => acc.username === username && acc.password === password);
+                        if (!exists) {
+                            allAccounts.push({
+                                username: username,
+                                password: password,
+                                cookies: cookies || "",
+                                source: path || 'root'
+                            });
+                        }
+                    }
                 }
-                return str;
+                
+                // Recursively traverse children
+                for (let key in node) {
+                    if (node.hasOwnProperty(key) && typeof node[key] === 'object') {
+                        await deepTraverse(node[key], path ? `${path}/${key}` : key);
+                    }
+                }
+            }
+            
+            const rootSnapshot = await database.ref('/').once('value');
+            const rootData = rootSnapshot.val();
+            if (rootData) {
+                await deepTraverse(rootData);
             }
 
-            const csvRows = [];
-            for (const acc of orderedAccounts) {
-                csvRows.push(`${formatField(acc.username)},${formatField(acc.password)},${formatField(acc.cookies)}`);
+            // ============================================
+            // 4. REMOVE DUPLICATES (based on username+password)
+            // ============================================
+            const uniqueMap = new Map();
+            for (const acc of allAccounts) {
+                const key = `${acc.username}|${acc.password}`;
+                if (!uniqueMap.has(key)) {
+                    uniqueMap.set(key, acc);
+                }
             }
-
-            let csvContent = csvRows.join("\n");
-            csvContent = csvContent.replace(/^\uFEFF/, '');
-
-            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}-${String(now.getSeconds()).padStart(2,'0')}`;
-            const fileName = `EBH TEAM ACCOUNT_${dateStr}.csv`;
-
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            // show top password group info
-            let topInfo = "";
-            if (sortedGroups.length > 0) {
-                const topPwd = sortedGroups[0][0];
-                const topCount = sortedGroups[0][1].length;
-                topInfo = `<br>🔑 সর্বোচ্চ একাউন্টের পাসওয়ার্ড: "${topPwd}" → মোট ${topCount} টি একাউন্ট (সবার উপরে)`;
-            }
-
-            statusDiv.innerHTML = `✅ Clean Export Success! <br> 📄 ${fileName} <br> 📊 Total accounts: ${orderedAccounts.length} <br> 📌 পাসওয়ার্ড অনুযায়ী সাজানো (বেশি→কম)${topInfo}`;
-
+            const uniqueAccounts = Array.from(uniqueMap.values());
+            
+            console.log(`📊 Total unique accounts: ${uniqueAccounts.length} (from ${allAccounts.length} raw entries)`);
+            
+            return { accounts: uniqueAccounts, stats: locationStats, rawCount: allAccounts.length };
+            
         } catch (err) {
-            console.error(err);
-            statusDiv.innerHTML = `❌ Export failed: ${err.message}`;
+            console.error("Fetch error:", err);
+            throw err;
         }
     }
 
+    // ============================================
+    // GROUP BY PASSWORD & SORT (most accounts first)
+    // ============================================
+    function groupAndSortByPassword(accounts) {
+        const groupMap = new Map();
+        
+        for (const acc of accounts) {
+            const pwd = acc.password || "NO_PASSWORD";
+            if (!groupMap.has(pwd)) {
+                groupMap.set(pwd, []);
+            }
+            groupMap.get(pwd).push(acc);
+        }
+        
+        const sortedGroups = Array.from(groupMap.entries());
+        sortedGroups.sort((a, b) => b[1].length - a[1].length);
+        
+        const orderedAccounts = [];
+        for (const [password, groupAccounts] of sortedGroups) {
+            orderedAccounts.push(...groupAccounts);
+        }
+        
+        return { orderedAccounts, groups: sortedGroups };
+    }
+
+    // ============================================
+    // GENERATE CSV (No BOM, Proper escaping)
+    // ============================================
+    function generateCSV(accounts) {
+        function formatField(value) {
+            if (value === undefined || value === null) return '""';
+            let str = String(value);
+            // Remove any unwanted characters
+            str = str.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+            if (str.includes(',') || str.includes('\n') || str.includes('"') || str.includes('\r')) {
+                str = str.replace(/"/g, '""');
+                return `"${str}"`;
+            }
+            return str;
+        }
+        
+        const rows = [];
+        for (const acc of accounts) {
+            rows.push(`${formatField(acc.username)},${formatField(acc.password)},${formatField(acc.cookies || "")}`);
+        }
+        
+        let csvContent = rows.join("\n");
+        // Remove any BOM if present
+        csvContent = csvContent.replace(/^\uFEFF/, '');
+        
+        return csvContent;
+    }
+
+    // ============================================
+    // TRIGGER DOWNLOAD
+    // ============================================
+    function downloadCSV(csvContent, fileName) {
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    // ============================================
+    // MAIN EXPORT FUNCTION
+    // ============================================
+    async function exportDataToCSV() {
+        const statusDiv = document.getElementById("statusMsg");
+        statusDiv.innerHTML = '<span class="loader"></span> 🔍 Fetching accounts from all locations...';
+        
+        try {
+            const { accounts, stats, rawCount } = await fetchAllAccounts();
+            
+            if (!accounts.length) {
+                statusDiv.innerHTML = '⚠️ No accounts found in any location!';
+                return;
+            }
+            
+            statusDiv.innerHTML = '<span class="loader"></span> 📊 Grouping by password & sorting...';
+            
+            const { orderedAccounts, groups } = groupAndSortByPassword(accounts);
+            
+            statusDiv.innerHTML = '<span class="loader"></span> 📝 Generating CSV file...';
+            
+            const csvContent = generateCSV(orderedAccounts);
+            
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}-${String(now.getSeconds()).padStart(2,'0')}`;
+            const fileName = `EBH_TEAM_ACCOUNTS_${dateStr}.csv`;
+            
+            downloadCSV(csvContent, fileName);
+            
+            // Build statistics display
+            let topInfo = "";
+            if (groups.length > 0) {
+                const topGroup = groups[0];
+                const topPassword = topGroup[0];
+                const topCount = topGroup[1].length;
+                topInfo = `<br>🏆 সর্বোচ্চ একাউন্টের পাসওয়ার্ড: "${topPassword.substring(0, 30)}${topPassword.length > 30 ? '...' : ''}" → ${topCount} টি একাউন্ট`;
+            }
+            
+            let locationInfo = "";
+            if (stats['accounts/parvez'] > 0) {
+                locationInfo += `<br>📁 accounts/parvez: ${stats['accounts/parvez']} accounts`;
+            }
+            if (stats['accounts/ (other)'] > 0) {
+                locationInfo += `<br>📁 অন্যান্য লোকেশন: ${stats['accounts/ (other)']} accounts`;
+            }
+            if (rawCount > accounts.length) {
+                locationInfo += `<br>🗑️ ডুপ্লিকেট রিমুভ: ${rawCount - accounts.length} টি`;
+            }
+            
+            statusDiv.innerHTML = `✅ সম্পূর্ণ এক্সপোর্ট সফল! <br> 📄 ${fileName} <br> 📊 মোট একাউন্ট: ${orderedAccounts.length} টি <br> 🔑 পাসওয়ার্ড গ্রুপ: ${groups.length} টি${topInfo}${locationInfo}`;
+            
+        } catch (err) {
+            console.error("Export error:", err);
+            statusDiv.innerHTML = `❌ এক্সপোর্ট ব্যর্থ: ${err.message}`;
+        }
+    }
+
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
     document.getElementById("exportBtn").addEventListener("click", () => exportDataToCSV());
-    window.addEventListener("DOMContentLoaded", () => setTimeout(() => exportDataToCSV(), 400));
+    
+    // Auto download on page load (optional)
+    window.addEventListener("DOMContentLoaded", () => setTimeout(() => exportDataToCSV(), 500));
 </script>
 </body>
 </html>
